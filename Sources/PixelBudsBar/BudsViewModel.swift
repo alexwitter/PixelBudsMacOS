@@ -157,10 +157,17 @@ final class BudsViewModel: ObservableObject {
         self.backgroundMonitoringEnabled = stored ?? true
     }
 
-    /// Returns the smaller of left/right battery, or nil if no snapshot exists.
+    /// Battery shown next to the menu-bar icon: the lowest bud that's actually
+    /// reporting, preferring buds out of the case. A bud in a closed case can't
+    /// talk to the Mac and reports 0, so a plain min() showed 0% whenever you
+    /// wore just one. Nil when no snapshot exists or neither bud reports.
     var menuBarBatteryPercent: Int32? {
         guard let s = snapshot else { return nil }
-        return min(s.leftBattery, s.rightBattery)
+        let buds = [(level: s.leftBattery, inCase: s.leftInCase),
+                    (level: s.rightBattery, inCase: s.rightInCase)]
+            .filter { $0.level > 0 }
+        let worn = buds.filter { !$0.inCase }
+        return (worn.isEmpty ? buds : worn).map(\.level).min()
     }
 
     /// Called once at launch (from AppDelegate) so the side effect of opening
