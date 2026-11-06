@@ -267,6 +267,73 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         popover.contentViewController?.view.window?.makeKey()
     }
 
+    /// Builds the app's main menu bar. The SwiftUI `App` wrapper used to
+    /// supply this implicitly; with a plain AppKit entry point we own it.
+    /// Without it ⌘Q and ⌘W stop working while the settings window is open —
+    /// an accessory app shows no menu bar until `openSettings()` flips the
+    /// activation policy to `.regular`.
+    func makeMainMenu() -> NSMenu {
+        let appName = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
+            ?? ProcessInfo.processInfo.processName
+
+        let mainMenu = NSMenu()
+
+        // App menu. AppKit names it from the first item's submenu, so the
+        // submenu carries the title rather than the top-level item.
+        let appMenu = NSMenu(title: appName)
+
+        let settingsItem = NSMenuItem(
+            title: "Settings…",
+            action: #selector(menuOpenSettings),
+            keyEquivalent: ","
+        )
+        settingsItem.target = self
+        appMenu.addItem(settingsItem)
+
+        appMenu.addItem(.separator())
+
+        appMenu.addItem(NSMenuItem(
+            title: "Hide \(appName)",
+            action: #selector(NSApplication.hide(_:)),
+            keyEquivalent: "h"
+        ))
+
+        appMenu.addItem(.separator())
+
+        let quitItem = NSMenuItem(
+            title: "Quit \(appName)",
+            action: #selector(menuQuit),
+            keyEquivalent: "q"
+        )
+        quitItem.target = self
+        appMenu.addItem(quitItem)
+
+        let appMenuItem = NSMenuItem()
+        appMenuItem.submenu = appMenu
+        mainMenu.addItem(appMenuItem)
+
+        // Window menu — this is what gives the settings window ⌘W. The items
+        // are nil-targeted so AppKit routes them to the key window.
+        let windowMenu = NSMenu(title: "Window")
+        windowMenu.addItem(NSMenuItem(
+            title: "Close",
+            action: #selector(NSWindow.performClose(_:)),
+            keyEquivalent: "w"
+        ))
+        windowMenu.addItem(NSMenuItem(
+            title: "Minimize",
+            action: #selector(NSWindow.performMiniaturize(_:)),
+            keyEquivalent: "m"
+        ))
+
+        let windowMenuItem = NSMenuItem()
+        windowMenuItem.submenu = windowMenu
+        mainMenu.addItem(windowMenuItem)
+        NSApp.windowsMenu = windowMenu
+
+        return mainMenu
+    }
+
     /// Builds and displays the right-click NSMenu next to the status item.
     /// We construct it fresh each time so item enablement (Ring) reflects the
     /// current snapshot without needing a validator selector.
