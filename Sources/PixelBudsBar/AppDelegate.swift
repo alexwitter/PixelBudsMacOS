@@ -27,7 +27,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let model = BudsViewModel()
     let loginItem = LoginItemManager()
     private let lowBatteryNotifier = LowBatteryNotifier()
-    private let updater = UpdaterController()
 
     private var statusItem: NSStatusItem!
     private let popover = NSPopover()
@@ -360,16 +359,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         menu.addItem(.separator())
 
-        let checkUpdatesItem = NSMenuItem(
-            title: "Check for Updates…",
-            action: #selector(menuCheckForUpdates),
-            keyEquivalent: ""
-        )
-        checkUpdatesItem.target = self
-        menu.addItem(checkUpdatesItem)
-
-        menu.addItem(.separator())
-
         let settingsItem = NSMenuItem(
             title: "Settings…",
             action: #selector(menuOpenSettings),
@@ -394,10 +383,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         statusItem.menu = menu
         statusItem.button?.performClick(nil)
         statusItem.menu = nil
-    }
-
-    @objc private func menuCheckForUpdates() {
-        updater.checkForUpdates()
     }
 
     @objc private func menuRingBuds() {

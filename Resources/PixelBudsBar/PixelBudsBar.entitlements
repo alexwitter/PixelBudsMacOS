@@ -2,8 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <!-- Required by Sparkle to download and verify updates over HTTPS. -->
-    <key>com.apple.security.network.client</key>
-    <true/>
+    <!-- No network entitlement: this fork has no auto-updater and talks only to
+         the buds over Bluetooth. -->
 </dict>
 </plist>

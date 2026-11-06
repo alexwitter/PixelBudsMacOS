@@ -16,8 +16,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.28.0"),
-        .package(url: "https://github.com/sindresorhus/KeyboardShortcuts.git", from: "2.2.0"),
-        .package(url: "https://github.com/sparkle-project/Sparkle.git", from: "2.6.0"),
+        .package(url: "https://github.com/sindresorhus/KeyboardShortcuts.git", from: "3.1.0"),
     ],
     targets: [
         .target(
@@ -68,7 +67,6 @@ let package = Package(
             dependencies: [
                 "MaestroIOBluetooth",
                 .product(name: "KeyboardShortcuts", package: "KeyboardShortcuts"),
-                .product(name: "Sparkle", package: "Sparkle"),
             ],
             path: "Sources/PixelBudsBar",
             resources: [

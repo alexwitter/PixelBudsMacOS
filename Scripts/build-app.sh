@@ -40,7 +40,6 @@ echo "→ Assembling ${APP_DIR}…"
 rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS"
 mkdir -p "$APP_DIR/Contents/Resources"
-mkdir -p "$APP_DIR/Contents/Frameworks"
 
 cp "$BIN_PATH" "$APP_DIR/Contents/MacOS/PixelBudsBar"
 
@@ -55,10 +54,6 @@ for RESOURCE_BUNDLE in "$BIN_DIR"/*.bundle; do
     echo "→ Copying $(basename "$RESOURCE_BUNDLE")…"
     cp -R "$RESOURCE_BUNDLE" "$APP_DIR/Contents/Resources/"
 done
-# SwiftPM doesn't add the @executable_path/../Frameworks rpath that an embedded
-# Sparkle.framework needs. Patch it into the binary now, before signing.
-install_name_tool -add_rpath "@executable_path/../Frameworks" \
-    "$APP_DIR/Contents/MacOS/PixelBudsBar"
 cp "$ROOT/Resources/PixelBudsBar/Info.plist" "$APP_DIR/Contents/Info.plist"
 
 for f in "$ROOT/Sources/PixelBudsBar/Resources"/*; do
@@ -84,45 +79,11 @@ if [[ -f "$ICON_SRC" ]]; then
     rm -rf "$ICONSET_DIR"
 fi
 
-# ── 4. Embed Sparkle.framework ────────────────────────────────────────────────
-# SPM downloads the Sparkle XCFramework to .build/artifacts/. Pick the macOS
-# arm64+x86_64 slice and embed it in Contents/Frameworks/.
-SPARKLE_XCFW="$(find "$ROOT/.build/artifacts" -name "Sparkle.xcframework" 2>/dev/null | head -1)"
-if [[ -z "$SPARKLE_XCFW" ]]; then
-    echo "→ Sparkle not yet resolved — running swift package resolve…"
-    swift package resolve
-    SPARKLE_XCFW="$(find "$ROOT/.build/artifacts" -name "Sparkle.xcframework" 2>/dev/null | head -1)"
-fi
-
-if [[ -n "$SPARKLE_XCFW" ]]; then
-    echo "→ Embedding Sparkle.framework…"
-    # The universal macOS slice is named "macos-arm64_x86_64" or "macos-arm64"
-    SPARKLE_FW="$(find "$SPARKLE_XCFW" -maxdepth 2 -name "Sparkle.framework" | head -1)"
-    if [[ -n "$SPARKLE_FW" ]]; then
-        cp -R "$SPARKLE_FW" "$APP_DIR/Contents/Frameworks/Sparkle.framework"
-    else
-        echo "  ⚠ Could not find Sparkle.framework slice inside $SPARKLE_XCFW — skipping embed"
-    fi
-else
-    echo "  ⚠ Sparkle XCFramework not found — update checks will not work"
-fi
-
-# ── 5. Code-sign ──────────────────────────────────────────────────────────────
+# ── 4. Code-sign ──────────────────────────────────────────────────────────────
+# This fork drops the Sparkle auto-updater: updates come only from rebuilding
+# reviewed source.
 if [[ -n "$IDENTITY" ]]; then
     echo "→ Signing with Developer ID: $IDENTITY"
-
-    # Sign Sparkle's inner XPC services first, then the framework, then the app.
-    # Order matters: codesign verifies the chain inner → outer.
-    for xpc in "$APP_DIR/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices"/*.xpc; do
-        [[ -e "$xpc" ]] || continue
-        codesign --force --options runtime --sign "$IDENTITY" "$xpc"
-    done
-
-    SPARKLE_FW_EMBEDDED="$APP_DIR/Contents/Frameworks/Sparkle.framework"
-    if [[ -d "$SPARKLE_FW_EMBEDDED" ]]; then
-        codesign --force --options runtime --sign "$IDENTITY" "$SPARKLE_FW_EMBEDDED"
-    fi
-
     codesign --force \
              --options runtime \
              --entitlements "$ENTITLEMENTS" \
@@ -135,7 +96,7 @@ fi
 
 echo "✓ Built $APP_DIR"
 
-# ── 6. Create DMG (release builds with a real identity only) ──────────────────
+# ── 5. Create DMG (release builds with a real identity only) ──────────────────
 if [[ -z "$IDENTITY" ]]; then
     echo ""
     echo "  Run it with:    open '$APP_DIR'"
@@ -172,7 +133,7 @@ codesign --force --sign "$IDENTITY" "$DMG_PATH"
 
 echo "✓ Created $DMG_PATH"
 
-# ── 7. Notarize & staple (only when credentials are provided) ─────────────────
+# ── 6. Notarize & staple (only when credentials are provided) ─────────────────
 if [[ -z "${NOTARIZE_APPLE_ID:-}" ]]; then
     echo ""
     echo "  Skipping notarization (set NOTARIZE_APPLE_ID / NOTARIZE_TEAM_ID / NOTARIZE_PASSWORD to enable)."
