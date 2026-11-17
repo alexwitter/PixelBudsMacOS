@@ -83,6 +83,17 @@ final class BudsViewModel: ObservableObject {
         var leftInEar: InEarState = .unknown
         var rightInEar: InEarState = .unknown
 
+        /// Closing the case lid puts docked buds (and the case) to sleep: they
+        /// stop reporting and read back as 0% / unknown. Rather than show 0% or
+        /// hide the case, we keep the last level we heard and flag it stale.
+        /// Cleared as soon as that source reports again.
+        var leftStale = false
+        var rightStale = false
+        var caseStale = false
+        /// When the most recent stale period began (the lid closing).
+        var staleSince: Date?
+        var anyStale: Bool { leftStale || rightStale || caseStale }
+
         /// True when both buds are reported sitting in the case. In this state
         /// the firmware rejects practically every settings write (status 9 /
         /// FAILED_PRECONDITION), so the UI surfaces a banner and grays out
@@ -160,12 +171,13 @@ final class BudsViewModel: ObservableObject {
     /// Battery shown next to the menu-bar icon: the lowest bud that's actually
     /// reporting, preferring buds out of the case. A bud in a closed case can't
     /// talk to the Mac and reports 0, so a plain min() showed 0% whenever you
-    /// wore just one. Nil when no snapshot exists or neither bud reports.
+    /// wore just one. Last-known (stale) levels from a closed case don't count.
+    /// Nil when no snapshot exists or neither bud reports.
     var menuBarBatteryPercent: Int32? {
         guard let s = snapshot else { return nil }
-        let buds = [(level: s.leftBattery, inCase: s.leftInCase),
-                    (level: s.rightBattery, inCase: s.rightInCase)]
-            .filter { $0.level > 0 }
+        let buds = [(level: s.leftBattery, inCase: s.leftInCase, stale: s.leftStale),
+                    (level: s.rightBattery, inCase: s.rightInCase, stale: s.rightStale)]
+            .filter { $0.level > 0 && !$0.stale }
         let worn = buds.filter { !$0.inCase }
         return (worn.isEmpty ? buds : worn).map(\.level).min()
     }
@@ -907,14 +919,34 @@ final class BudsViewModel: ObservableObject {
         guard var s = snapshot else { return }
         let wasBothInCase = s.bothInCase
         s.updatedAt = Date()
+        let wasStale = s.anyStale
         if rt.hasBatteryInfo {
-            s.leftBattery = rt.batteryInfo.left.level
-            s.leftCharging = rt.batteryInfo.left.state == .batteryCharging
-            s.rightBattery = rt.batteryInfo.right.level
-            s.rightCharging = rt.batteryInfo.right.state == .batteryCharging
-            s.caseBattery = rt.batteryInfo.case.level
-            s.caseChargingKnown = rt.batteryInfo.case.state != .unknown
-            s.caseCharging = rt.batteryInfo.case.state == .batteryCharging
+            let b = rt.batteryInfo
+            // A docked bud that drops to 0% has gone to sleep (lid closed), not
+            // flat: keep its last level and mark it stale until it reports again.
+            if b.left.level == 0, s.leftBattery > 0, s.leftInCase || s.leftStale {
+                s.leftStale = true
+            } else {
+                s.leftBattery = b.left.level
+                s.leftCharging = b.left.state == .batteryCharging
+                s.leftStale = false
+            }
+            if b.right.level == 0, s.rightBattery > 0, s.rightInCase || s.rightStale {
+                s.rightStale = true
+            } else {
+                s.rightBattery = b.right.level
+                s.rightCharging = b.right.state == .batteryCharging
+                s.rightStale = false
+            }
+            // The case goes quiet the same way; keep showing its last reading.
+            if b.case.state == .unknown, s.caseChargingKnown || s.caseStale {
+                s.caseStale = true
+            } else {
+                s.caseBattery = b.case.level
+                s.caseChargingKnown = b.case.state != .unknown
+                s.caseCharging = b.case.state == .batteryCharging
+                s.caseStale = false
+            }
         }
         if rt.hasPlacement {
             s.leftInCase = rt.placement.leftBudInCase
@@ -924,6 +956,11 @@ final class BudsViewModel: ObservableObject {
             if rt.placement.leftBudInCase  { s.leftInEar  = .outOfEar }
             if rt.placement.rightBudInCase { s.rightInEar = .outOfEar }
         }
+        // A sleeping bud can only be asleep in the case, whatever placement says.
+        if s.leftStale  { s.leftInCase = true }
+        if s.rightStale { s.rightInCase = true }
+        if !wasStale, s.anyStale { s.staleSince = Date() }
+        if !s.anyStale { s.staleSince = nil }
         snapshot = s
         // If we connected while both buds were docked the firmware rejected
         // most settings reads with status 9, and the snapshot got published

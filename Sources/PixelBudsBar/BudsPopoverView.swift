@@ -10,6 +10,9 @@ struct BudsPopoverView: View {
             Divider()
 
             if let snap = model.snapshot {
+                if snap.anyStale {
+                    caseClosedNotice(since: snap.staleSince)
+                }
                 batteryRows(snap)
                 if snap.bothInCase {
                     inCaseHint
@@ -33,6 +36,32 @@ struct BudsPopoverView: View {
         .frame(width: 280)
         .onAppear { model.acquireConnection() }
         .onDisappear { model.releaseConnection() }
+    }
+
+    /// Shown while the case lid is closed: docked buds and the case stop
+    /// reporting, so the dimmed rows below are the last levels we heard.
+    private func caseClosedNotice(since: Date?) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: "lock.fill")
+                .foregroundStyle(.secondary)
+                .imageScale(.small)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Case closed — charge state unknown", comment: "Notice when the case lid is closed")
+                    .font(.caption)
+                if let since {
+                    Text("Dimmed levels are from \(since, format: .dateTime.hour().minute())",
+                         comment: "Time the last known battery levels were read")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(8)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(.quaternary.opacity(0.5))
+        )
     }
 
     /// Small inline banner for failed setting writes (e.g. ANC change rejected
@@ -138,20 +167,23 @@ struct BudsPopoverView: View {
                 label: String(localized: "Left", comment: "Earbud side label"),
                 percent: Int(snap.leftBattery),
                 charging: snap.leftCharging,
-                placement: snap.leftInCase ? String(localized: "in case", comment: "Earbud placement label") : nil
+                placement: snap.leftInCase ? String(localized: "in case", comment: "Earbud placement label") : nil,
+                stale: snap.leftStale
             )
             BatteryRow(
                 label: String(localized: "Right", comment: "Earbud side label"),
                 percent: Int(snap.rightBattery),
                 charging: snap.rightCharging,
-                placement: snap.rightInCase ? String(localized: "in case", comment: "Earbud placement label") : nil
+                placement: snap.rightInCase ? String(localized: "in case", comment: "Earbud placement label") : nil,
+                stale: snap.rightStale
             )
             if snap.caseChargingKnown {
                 BatteryRow(
                     label: String(localized: "Case", comment: "Battery case label"),
                     percent: Int(snap.caseBattery),
                     charging: snap.caseCharging,
-                    placement: nil
+                    placement: nil,
+                    stale: snap.caseStale
                 )
             }
         }
@@ -265,6 +297,9 @@ private struct BatteryRow: View {
     let percent: Int
     let charging: Bool
     let placement: String?
+    /// Last-known level from a closed case: dimmed, with no charging bolt
+    /// because we can't see whether it's charging.
+    var stale = false
 
     var body: some View {
         HStack {
@@ -273,7 +308,7 @@ private struct BatteryRow: View {
             HStack(spacing: 4) {
                 Text("\(percent)%")
                     .font(.system(.body, design: .monospaced))
-                if charging {
+                if charging && !stale {
                     Image(systemName: "bolt.fill").foregroundStyle(.green).imageScale(.small)
                 }
                 if let placement {
@@ -282,6 +317,7 @@ private struct BatteryRow: View {
             }
             .frame(width: 90, alignment: .trailing)
         }
+        .opacity(stale ? 0.4 : 1)
     }
 }
 

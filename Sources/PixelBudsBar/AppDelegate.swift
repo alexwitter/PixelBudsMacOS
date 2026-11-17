@@ -230,12 +230,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// True when any non-charging source (left, right, case) is at or below
     /// the same threshold the notifier uses (15%). We deliberately skip a bud
     /// that's actively charging — same reasoning as LowBatteryNotifier: the
-    /// user just docked it, surfacing a "low" indicator is noise.
+    /// user just docked it, surfacing a "low" indicator is noise. A stale bud
+    /// is asleep in a closed case, which is charging it, so it's skipped too.
     private static func hasLowBattery(snapshot: BudsViewModel.BudsSnapshot?) -> Bool {
         guard let s = snapshot else { return false }
         let threshold: Int32 = 15
-        if !s.leftCharging && s.leftBattery > 0 && s.leftBattery <= threshold { return true }
-        if !s.rightCharging && s.rightBattery > 0 && s.rightBattery <= threshold { return true }
+        if !s.leftCharging && !s.leftStale && s.leftBattery > 0 && s.leftBattery <= threshold { return true }
+        if !s.rightCharging && !s.rightStale && s.rightBattery > 0 && s.rightBattery <= threshold { return true }
         if s.caseChargingKnown && !s.caseCharging && s.caseBattery > 0 && s.caseBattery <= threshold {
             return true
         }
