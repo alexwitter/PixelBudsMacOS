@@ -301,21 +301,25 @@ private struct BatteryRow: View {
     /// because we can't see whether it's charging.
     var stale = false
 
+    /// Fixed-width columns so every row lines up and nothing shifts when the
+    /// bolt or placement text comes and goes:
+    /// label · placement · bolt · percent (room for "100%") · bar (fills the rest).
     var body: some View {
-        HStack {
-            Text(label).frame(width: 50, alignment: .leading)
+        HStack(spacing: 6) {
+            Text(label).frame(width: 40, alignment: .leading)
+            Text(placement ?? "")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .frame(width: 40, alignment: .trailing)
+            Image(systemName: "bolt.fill")
+                .foregroundStyle(.green)
+                .imageScale(.small)
+                .opacity(charging && !stale ? 1 : 0)
+                .frame(width: 12)
+            Text("\(percent)%")
+                .font(.system(.body, design: .monospaced))
+                .frame(width: 40, alignment: .trailing)
             BatteryBar(percent: percent, charging: charging)
-            HStack(spacing: 4) {
-                Text("\(percent)%")
-                    .font(.system(.body, design: .monospaced))
-                if charging && !stale {
-                    Image(systemName: "bolt.fill").foregroundStyle(.green).imageScale(.small)
-                }
-                if let placement {
-                    Text(placement).font(.caption2).foregroundStyle(.secondary)
-                }
-            }
-            .frame(width: 90, alignment: .trailing)
         }
         .opacity(stale ? 0.4 : 1)
     }
