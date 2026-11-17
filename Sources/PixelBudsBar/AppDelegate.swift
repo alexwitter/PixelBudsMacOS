@@ -465,8 +465,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     /// Same threshold as LowBatteryNotifier.
     private static let lowBatteryThreshold: Int32 = 15
-    private static let barSize = NSSize(width: 5.5, height: 12)
+    private static let barWidth: CGFloat = 5.5
     private static let barGap: CGFloat = 2.5
+    /// The 14pt headphones symbol's image is 17pt square, but its visible
+    /// shape runs from about 2pt below the top to 1.125pt above the bottom
+    /// (measured from a render). The batteries span exactly that, so they
+    /// match the headphones' height.
+    private static let glyphInkTopInset: CGFloat = 2
+    private static let glyphInkBottomInset: CGFloat = 1.125
     private static let iconHeight: CGFloat = 18
 
     private static let headphones: NSImage? = NSImage(
@@ -485,16 +491,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private static func budsIcon(left: Gauge?, right: Gauge?, ancBadge: NSColor?) -> NSImage? {
         guard let glyph = headphones else { return nil }
         let glyphSize = glyph.size
-        let size = NSSize(width: barSize.width * 2 + barGap * 2 + glyphSize.width, height: iconHeight)
+        let size = NSSize(width: barWidth * 2 + barGap * 2 + glyphSize.width, height: iconHeight)
 
         let composite = NSImage(size: size, flipped: false) { rect in
-            let barY = (rect.height - barSize.height) / 2
-            drawBattery(left, in: NSRect(origin: NSPoint(x: 0, y: barY), size: barSize))
-            drawBattery(right, in: NSRect(origin: NSPoint(x: rect.maxX - barSize.width, y: barY), size: barSize))
-
-            let glyphRect = NSRect(x: barSize.width + barGap,
+            let glyphRect = NSRect(x: barWidth + barGap,
                                    y: (rect.height - glyphSize.height) / 2,
                                    width: glyphSize.width, height: glyphSize.height)
+
+            let barY = glyphRect.minY + glyphInkBottomInset
+            let barSize = NSSize(width: barWidth,
+                                 height: glyphRect.height - glyphInkTopInset - glyphInkBottomInset)
+            drawBattery(left, in: NSRect(origin: NSPoint(x: 0, y: barY), size: barSize))
+            drawBattery(right, in: NSRect(origin: NSPoint(x: rect.maxX - barWidth, y: barY), size: barSize))
+
             // Tint the glyph: draw it, then paint label colour over its alpha.
             NSGraphicsContext.saveGraphicsState()
             glyph.draw(in: glyphRect)
