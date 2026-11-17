@@ -205,17 +205,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             button.title = ""
         } else {
             // ANC badge: only show a colored dot when ANC is actively doing
-            // something. For Off/Unknown we keep the plain template so the
-            // icon still inverts on click and follows label color naturally.
-            let ancBadge = Self.ancBadgeColor(for: model.snapshot?.anc)
-            let lowBattery = Self.hasLowBattery(snapshot: model.snapshot)
-            button.image = Self.budsIcon(ancBadge: ancBadge, lowBattery: lowBattery)
-            if let pct = model.menuBarBatteryPercent {
-                button.title = " \(pct)%"
-            } else {
-                button.title = ""
-            }
+            // something (Off/Unknown get no dot).
+            let s = model.snapshot
+            let ancBadge = Self.ancBadgeColor(for: s?.anc)
+            let left = s.map { Gauge(level: $0.leftBattery, charging: $0.leftCharging, stale: $0.leftStale) }
+            let right = s.map { Gauge(level: $0.rightBattery, charging: $0.rightCharging, stale: $0.rightStale) }
+            button.image = Self.budsIcon(left: left, right: right, ancBadge: ancBadge)
+            button.title = ""
+            button.setAccessibilityLabel(Self.accessibilityLabel(left: left, right: right))
         }
+    }
+
+    private static func accessibilityLabel(left: Gauge?, right: Gauge?) -> String {
+        func describe(_ g: Gauge?) -> String {
+            guard let g, g.isKnown else { return String(localized: "unknown") }
+            return g.charging ? "\(g.level)%, charging" : "\(g.level)%"
+        }
+        return String(localized: "Pixel Buds: left \(describe(left)), right \(describe(right))")
     }
 
     private static func ancBadgeColor(for state: MaestroPw_AncState?) -> NSColor? {
@@ -227,21 +233,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
-    /// True when any non-charging source (left, right, case) is at or below
-    /// the same threshold the notifier uses (15%). We deliberately skip a bud
-    /// that's actively charging — same reasoning as LowBatteryNotifier: the
-    /// user just docked it, surfacing a "low" indicator is noise. A stale bud
-    /// is asleep in a closed case, which is charging it, so it's skipped too.
-    private static func hasLowBattery(snapshot: BudsViewModel.BudsSnapshot?) -> Bool {
-        guard let s = snapshot else { return false }
-        let threshold: Int32 = 15
-        if !s.leftCharging && !s.leftStale && s.leftBattery > 0 && s.leftBattery <= threshold { return true }
-        if !s.rightCharging && !s.rightStale && s.rightBattery > 0 && s.rightBattery <= threshold { return true }
-        if s.caseChargingKnown && !s.caseCharging && s.caseBattery > 0 && s.caseBattery <= threshold {
-            return true
-        }
-        return false
-    }
 
     // MARK: - Popover lifecycle
 
@@ -460,67 +451,62 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
-    // MARK: - Resources
+    // MARK: - Menu-bar icon
 
-    private static let iconSize = NSSize(width: 18, height: 18)
+    /// One bud's battery as drawn in the menu bar.
+    struct Gauge {
+        var level: Int32
+        var charging: Bool
+        /// Last-known level from a closed case (see BudsSnapshot.leftStale).
+        var stale: Bool
+        /// A bud asleep in a closed case reports 0; draw that as unknown, not flat.
+        var isKnown: Bool { level > 0 && !stale }
+    }
 
-    /// Raw template glyph loaded once from the resource bundle. Kept as a
-    /// template image so it follows the menu bar tint when used without a
-    /// badge (Off/Unknown ANC).
-    private static let budsTemplate: NSImage? = {
-        for bundle in [Bundle.main, Bundle.module] {
-            if let url = bundle.url(forResource: "BudsTemplate", withExtension: "png"),
-               let img = NSImage(contentsOf: url) {
-                img.size = iconSize
-                img.isTemplate = true
-                return img
-            }
-        }
-        return nil
-    }()
+    /// Same threshold as LowBatteryNotifier.
+    private static let lowBatteryThreshold: Int32 = 15
+    private static let barSize = NSSize(width: 5.5, height: 12)
+    private static let barGap: CGFloat = 2.5
+    private static let iconHeight: CGFloat = 18
 
-    /// Compose the menu-bar icon with optional badges:
-    /// - `ancBadge`: bottom-right colored dot reflecting current ANC state.
-    /// - `lowBattery`: top-right red dot when any source is below the
-    ///   notifier's threshold. Stays visible regardless of the popover state.
-    /// When neither badge is set, returns the bare template so AppKit keeps
-    /// handling tinting and click-inversion natively.
-    private static func budsIcon(ancBadge: NSColor?, lowBattery: Bool) -> NSImage? {
-        guard let template = budsTemplate else { return nil }
-        if ancBadge == nil && !lowBattery { return template }
+    private static let headphones: NSImage? = NSImage(
+        systemSymbolName: "headphones",
+        accessibilityDescription: nil
+    )?.withSymbolConfiguration(.init(pointSize: 14, weight: .regular))
 
-        let size = iconSize
+    /// Headphones glyph flanked by a small vertical battery for each bud,
+    /// left bud on the left, styled after the iPad status bar:
+    /// - fill height is the level; label colour, red at or below 15%, green
+    ///   while charging
+    /// - an empty, faint outline when the level is unknown (asleep in a closed
+    ///   case, or not connected yet)
+    /// - `ancBadge`: coloured dot for the current ANC mode, in the empty space
+    ///   between the ear cups.
+    private static func budsIcon(left: Gauge?, right: Gauge?, ancBadge: NSColor?) -> NSImage? {
+        guard let glyph = headphones else { return nil }
+        let glyphSize = glyph.size
+        let size = NSSize(width: barSize.width * 2 + barGap * 2 + glyphSize.width, height: iconHeight)
+
         let composite = NSImage(size: size, flipped: false) { rect in
-            // 1. Paint the whole rect with the foreground color, then mask
-            //    to the template's alpha. This effectively tints the glyph.
-            NSColor.labelColor.setFill()
-            rect.fill()
-            template.draw(in: rect,
-                          from: .zero,
-                          operation: .destinationIn,
-                          fraction: 1.0)
+            let barY = (rect.height - barSize.height) / 2
+            drawBattery(left, in: NSRect(origin: NSPoint(x: 0, y: barY), size: barSize))
+            drawBattery(right, in: NSRect(origin: NSPoint(x: rect.maxX - barSize.width, y: barY), size: barSize))
 
-            // 2. Draw each badge in its own corner. The halo punch + colored
-            //    fill pattern is identical for both — only the corner differs.
-            let dotSize: CGFloat = 7
-            let inset: CGFloat = 0.5
+            let glyphRect = NSRect(x: barSize.width + barGap,
+                                   y: (rect.height - glyphSize.height) / 2,
+                                   width: glyphSize.width, height: glyphSize.height)
+            // Tint the glyph: draw it, then paint label colour over its alpha.
+            NSGraphicsContext.saveGraphicsState()
+            glyph.draw(in: glyphRect)
+            NSColor.labelColor.setFill()
+            glyphRect.fill(using: .sourceAtop)
+            NSGraphicsContext.restoreGraphicsState()
+
             if let badge = ancBadge {
-                let dotRect = NSRect(
-                    x: rect.maxX - dotSize - inset,
-                    y: rect.minY + inset,
-                    width: dotSize,
-                    height: dotSize
-                )
-                drawBadgeDot(in: dotRect, color: badge)
-            }
-            if lowBattery {
-                let dotRect = NSRect(
-                    x: rect.maxX - dotSize - inset,
-                    y: rect.maxY - dotSize - inset,
-                    width: dotSize,
-                    height: dotSize
-                )
-                drawBadgeDot(in: dotRect, color: .systemRed)
+                let dotSize: CGFloat = 4.5
+                badge.setFill()
+                NSBezierPath(ovalIn: NSRect(x: glyphRect.midX - dotSize / 2, y: glyphRect.minY + 1,
+                                            width: dotSize, height: dotSize)).fill()
             }
             return true
         }
@@ -532,17 +518,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return composite
     }
 
-    /// Punch a transparent halo + fill a colored dot. Shared by the ANC and
-    /// low-battery badges so they look consistent when both are visible.
-    private static func drawBadgeDot(in dotRect: NSRect, color: NSColor) {
-        let haloRect = dotRect.insetBy(dx: -1.5, dy: -1.5)
-        NSColor.clear.setFill()
-        let halo = NSBezierPath(ovalIn: haloRect)
-        NSGraphicsContext.current?.cgContext.setBlendMode(.clear)
-        halo.fill()
-        NSGraphicsContext.current?.cgContext.setBlendMode(.normal)
+    /// A tiny upright battery: outlined body with a nub on top, filled from
+    /// the bottom by `gauge.level`.
+    private static func drawBattery(_ gauge: Gauge?, in rect: NSRect) {
+        let known = gauge?.isKnown ?? false
+        let outline = NSColor.labelColor.withAlphaComponent(known ? 0.6 : 0.3)
 
+        let nubHeight: CGFloat = 1.5
+        let nub = NSRect(x: rect.midX - 1, y: rect.maxY - nubHeight, width: 2, height: nubHeight)
+        outline.setFill()
+        NSBezierPath(roundedRect: nub, xRadius: 0.5, yRadius: 0.5).fill()
+
+        let body = NSRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height - nubHeight)
+            .insetBy(dx: 0.5, dy: 0.5)
+        let frame = NSBezierPath(roundedRect: body, xRadius: 1.2, yRadius: 1.2)
+        frame.lineWidth = 1
+        outline.setStroke()
+        frame.stroke()
+
+        guard let gauge, known else { return }
+        let inner = body.insetBy(dx: 1.25, dy: 1.25)
+        let fraction = CGFloat(min(100, max(0, gauge.level))) / 100
+        // At least 2pt so a nearly flat bud still shows a visible red sliver.
+        let fill = NSRect(x: inner.minX, y: inner.minY,
+                          width: inner.width, height: max(2, inner.height * fraction))
+        let color: NSColor = gauge.charging ? .systemGreen
+            : gauge.level <= lowBatteryThreshold ? .systemRed
+            : .labelColor
         color.setFill()
-        NSBezierPath(ovalIn: dotRect).fill()
+        NSBezierPath(roundedRect: fill, xRadius: 0.5, yRadius: 0.5).fill()
     }
 }

@@ -168,20 +168,6 @@ final class BudsViewModel: ObservableObject {
         self.backgroundMonitoringEnabled = stored ?? true
     }
 
-    /// Battery shown next to the menu-bar icon: the lowest bud that's actually
-    /// reporting, preferring buds out of the case. A bud in a closed case can't
-    /// talk to the Mac and reports 0, so a plain min() showed 0% whenever you
-    /// wore just one. Last-known (stale) levels from a closed case don't count.
-    /// Nil when no snapshot exists or neither bud reports.
-    var menuBarBatteryPercent: Int32? {
-        guard let s = snapshot else { return nil }
-        let buds = [(level: s.leftBattery, inCase: s.leftInCase, stale: s.leftStale),
-                    (level: s.rightBattery, inCase: s.rightInCase, stale: s.rightStale)]
-            .filter { $0.level > 0 && !$0.stale }
-        let worn = buds.filter { !$0.inCase }
-        return (worn.isEmpty ? buds : worn).map(\.level).min()
-    }
-
     /// Called once at launch (from AppDelegate) so the side effect of opening
     /// the connection is observable in the UI lifecycle, not buried in init.
     /// If the user had background monitoring enabled (or this is first run
