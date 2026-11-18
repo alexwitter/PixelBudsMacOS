@@ -14,7 +14,7 @@ struct BudsPopoverView: View {
                 if !live {
                     lastSeenNotice(since: snap.updatedAt)
                 } else if snap.anyStale {
-                    caseClosedNotice(since: snap.staleSince)
+                    staleNotice(snap)
                 }
                 batteryRows(snap, live: live)
                 if live && snap.bothInCase {
@@ -73,21 +73,42 @@ struct BudsPopoverView: View {
         )
     }
 
-    /// Shown while the case lid is closed: docked buds and the case stop
-    /// reporting, so the dimmed rows below are the last levels we heard.
-    private func caseClosedNotice(since: Date?) -> some View {
-        HStack(alignment: .top, spacing: 6) {
-            Image(systemName: "lock.fill")
+    /// Explains dimmed rows while connected. The case has no radio of its
+    /// own: it reports only through a bud docked in it, and a docked bud
+    /// goes quiet when the lid closes. So the wording depends on why we've
+    /// lost sight of it.
+    private func staleNotice(_ snap: BudsViewModel.BudsSnapshot) -> some View {
+        let icon: String
+        let title: String
+        let detail: String?
+        let since = snap.staleSince.map { $0.formatted(.dateTime.hour().minute()) }
+        if snap.leftStale || snap.rightStale {
+            // A docked bud stopped reporting: the lid is shut on it.
+            icon = "lock.fill"
+            title = String(localized: "Case closed — charge state unknown", comment: "Notice when the case lid is closed on a docked bud")
+            detail = since.map { String(localized: "Dimmed levels are from \($0)", comment: "Time the last known battery levels were read") }
+        } else if !snap.leftInCase && !snap.rightInCase {
+            // Both buds are out, so nothing can relay the case's status.
+            icon = "info.circle"
+            title = String(localized: "Case out of reach — no bud in it", comment: "Notice when neither bud is docked, so the case can't report")
+            detail = since.map { String(localized: "The case reports through a docked bud. Its level is from \($0).", comment: "Why the case level is old, and when it was read") }
+        } else {
+            icon = "questionmark.circle"
+            title = String(localized: "Case charge state unknown", comment: "Notice when the case stopped reporting for an unclear reason")
+            detail = since.map { String(localized: "Dimmed levels are from \($0)", comment: "Time the last known battery levels were read") }
+        }
+        return HStack(alignment: .top, spacing: 6) {
+            Image(systemName: icon)
                 .foregroundStyle(.secondary)
                 .imageScale(.small)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Case closed — charge state unknown", comment: "Notice when the case lid is closed")
+                Text(title)
                     .font(.caption)
-                if let since {
-                    Text("Dimmed levels are from \(since, format: .dateTime.hour().minute())",
-                         comment: "Time the last known battery levels were read")
+                if let detail {
+                    Text(detail)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: 0)
