@@ -1,6 +1,7 @@
 import Foundation
 import OSLog
 import SwiftUI
+import IOBluetooth
 import MaestroIOBluetooth
 
 private let log = Logger(subsystem: "com.kshmlg.PixelBudsBar", category: "session")
@@ -11,6 +12,10 @@ final class BudsViewModel: ObservableObject {
         case idle
         case connecting
         case connected
+        /// macOS has no link to the buds (asleep in the case, or in use on
+        /// another device). We wait for macOS to connect them rather than
+        /// paging them ourselves.
+        case notConnected
         case error(String)
     }
 
@@ -610,6 +615,20 @@ final class BudsViewModel: ObservableObject {
         var suppressConnectingState = false
 
         while !Task.isCancelled {
+            // Only talk to the buds once macOS itself is connected to them.
+            // AppDelegate's baseband-connect watcher wakes us the moment that
+            // happens; this slow poll is only a backstop and costs no radio
+            // traffic (isConnected() is a local state read).
+            if let device = MaestroChannelOpener.findFirstPairedBuds(), !device.isConnected() {
+                if connectionState != .notConnected {
+                    log.info("session: buds not connected to this Mac — waiting for macOS to connect them")
+                }
+                connectionState = .notConnected
+                consecutiveFailures = 0
+                suppressConnectingState = false
+                try? await Task.sleep(nanoseconds: 30_000_000_000)
+                continue
+            }
             if !suppressConnectingState {
                 connectionState = .connecting
             }

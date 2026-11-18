@@ -250,7 +250,7 @@ struct SettingsView: View {
         Form {
             Section("Connection") {
                 switch model.connectionState {
-                case .idle:
+                case .idle, .notConnected:
                     Label("Not connected", systemImage: "circle.dotted")
                         .foregroundStyle(.secondary)
                 case .connecting:
@@ -300,7 +300,7 @@ struct SettingsView: View {
     private var connectionSection: some View {
         Section {
             switch model.connectionState {
-            case .idle:
+            case .idle, .notConnected:
                 Label("Not connected", systemImage: "circle.dotted")
                     .foregroundStyle(.secondary)
             case .connecting:

@@ -189,7 +189,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         switch model.connectionState {
         case .connecting, .connected:
             return
-        case .idle, .error:
+        case .idle, .notConnected, .error:
             log.info("buds baseband connected while \(String(describing: self.model.connectionState)) — forcing Maestro reconnect")
             model.forceReconnect()
         }
@@ -206,10 +206,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         } else {
             // ANC badge: only show a colored dot when ANC is actively doing
             // something (Off/Unknown get no dot).
+            // Until we have a live session, the snapshot is from the last one:
+            // draw empty outlines rather than old levels that look current.
+            let live = model.connectionState == .connected
             let s = model.snapshot
-            let ancBadge = Self.ancBadgeColor(for: s?.anc)
-            let left = s.map { Gauge(level: $0.leftBattery, charging: $0.leftCharging, stale: $0.leftStale) }
-            let right = s.map { Gauge(level: $0.rightBattery, charging: $0.rightCharging, stale: $0.rightStale) }
+            let ancBadge = live ? Self.ancBadgeColor(for: s?.anc) : nil
+            let left = s.map { Gauge(level: $0.leftBattery, charging: $0.leftCharging, stale: $0.leftStale || !live) }
+            let right = s.map { Gauge(level: $0.rightBattery, charging: $0.rightCharging, stale: $0.rightStale || !live) }
             button.image = Self.budsIcon(left: left, right: right, ancBadge: ancBadge)
             button.title = ""
             button.setAccessibilityLabel(Self.accessibilityLabel(left: left, right: right))

@@ -7,6 +7,7 @@ import MaestroIOBluetooth
 final class BudsConnection {
     enum ConnectError: Error, CustomStringConvertible {
         case noPairedBuds
+        case notConnectedToThisMac
         case rfcommOpen(Error)
         case channelResolution(Error)
         case timeout
@@ -15,6 +16,8 @@ final class BudsConnection {
             switch self {
             case .noPairedBuds:
                 return String(localized: "No paired Pixel Buds Pro found")
+            case .notConnectedToThisMac:
+                return String(localized: "Pixel Buds aren't connected to this Mac")
             case .rfcommOpen(let e):
                 // A missing SDP record (even after a refresh) usually means the
                 // buds aren't reachable for control right now — commonly because
@@ -109,6 +112,13 @@ final class BudsConnection {
     private static func openImpl() async throws -> BudsConnection {
         guard let device = MaestroChannelOpener.findFirstPairedBuds() else {
             throw ConnectError.noPairedBuds
+        }
+        // Never page the buds ourselves. Opening RFCOMM to a device macOS
+        // isn't connected to makes bluetoothd page it and try to bring up
+        // every profile — all night if the buds are asleep in the case, and
+        // in a tug-of-war with the phone when they're in use there.
+        guard device.isConnected() else {
+            throw ConnectError.notConnectedToThisMac
         }
         let adapter = RFCOMMTransportAdapter()
         do {

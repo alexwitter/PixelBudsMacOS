@@ -10,15 +10,26 @@ struct BudsPopoverView: View {
             Divider()
 
             if let snap = model.snapshot {
-                if snap.anyStale {
+                let live = model.connectionState == .connected
+                if !live {
+                    lastSeenNotice(since: snap.updatedAt)
+                } else if snap.anyStale {
                     caseClosedNotice(since: snap.staleSince)
                 }
-                batteryRows(snap)
-                if snap.bothInCase {
+                batteryRows(snap, live: live)
+                if live && snap.bothInCase {
                     inCaseHint
                 }
                 Divider()
                 ancControl(snap)
+                    .disabled(!live)
+            } else if model.connectionState == .notConnected {
+                Label(String(localized: "Connect your Pixel Buds to this Mac to see their battery.",
+                             comment: "Shown before the first reading when the buds aren't connected"),
+                      systemImage: "antenna.radiowaves.left.and.right.slash")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             } else if case .error(let message) = model.connectionState {
                 errorView(message)
             } else {
@@ -36,6 +47,30 @@ struct BudsPopoverView: View {
         .frame(width: 280)
         .onAppear { model.acquireConnection() }
         .onDisappear { model.releaseConnection() }
+    }
+
+    /// Shown whenever there's no live session: the rows below are whatever
+    /// the buds last told us, so say how old they are.
+    private func lastSeenNotice(since: Date) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: "antenna.radiowaves.left.and.right.slash")
+                .foregroundStyle(.secondary)
+                .imageScale(.small)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Not connected to this Mac", comment: "Notice when there is no live connection to the buds")
+                    .font(.caption)
+                Text("Last seen \(since, format: .relative(presentation: .named)), at \(since, format: .dateTime.hour().minute())",
+                     comment: "When the shown battery levels were last read")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(8)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(.quaternary.opacity(0.5))
+        )
     }
 
     /// Shown while the case lid is closed: docked buds and the case stop
@@ -119,6 +154,11 @@ struct BudsPopoverView: View {
                             .foregroundStyle(.tertiary)
                     }
                 }
+            case .notConnected:
+                HStack(spacing: 4) {
+                    Circle().fill(.secondary).frame(width: 6, height: 6)
+                    Text("Not connected", comment: "Connection state label").foregroundStyle(.secondary)
+                }
             case .error:
                 HStack(spacing: 4) {
                     Circle().fill(.red).frame(width: 6, height: 6)
@@ -161,21 +201,21 @@ struct BudsPopoverView: View {
         }
     }
 
-    private func batteryRows(_ snap: BudsViewModel.BudsSnapshot) -> some View {
+    private func batteryRows(_ snap: BudsViewModel.BudsSnapshot, live: Bool) -> some View {
         VStack(spacing: 8) {
             BatteryRow(
                 label: String(localized: "Left", comment: "Earbud side label"),
                 percent: Int(snap.leftBattery),
                 charging: snap.leftCharging,
                 placement: snap.leftInCase ? String(localized: "in case", comment: "Earbud placement label") : nil,
-                stale: snap.leftStale
+                stale: snap.leftStale || !live
             )
             BatteryRow(
                 label: String(localized: "Right", comment: "Earbud side label"),
                 percent: Int(snap.rightBattery),
                 charging: snap.rightCharging,
                 placement: snap.rightInCase ? String(localized: "in case", comment: "Earbud placement label") : nil,
-                stale: snap.rightStale
+                stale: snap.rightStale || !live
             )
             if snap.caseChargingKnown {
                 BatteryRow(
@@ -183,7 +223,7 @@ struct BudsPopoverView: View {
                     percent: Int(snap.caseBattery),
                     charging: snap.caseCharging,
                     placement: nil,
-                    stale: snap.caseStale
+                    stale: snap.caseStale || !live
                 )
             }
         }
