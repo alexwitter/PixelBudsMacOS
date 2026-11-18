@@ -10,7 +10,7 @@ struct BudsPopoverView: View {
             Divider()
 
             if let snap = model.snapshot {
-                let live = model.connectionState == .connected
+                let live = model.showsLiveData
                 if !live {
                     lastSeenNotice(since: snap.updatedAt)
                 } else if snap.anyStale {
@@ -137,7 +137,9 @@ struct BudsPopoverView: View {
 
     private var statusIndicator: some View {
         Group {
-            switch model.connectionState {
+            // During a short reconnect we keep showing "Connected" (see
+            // BudsViewModel.showsLiveData) rather than flashing a spinner.
+            switch model.showsLiveData ? .connected : model.connectionState {
             case .idle:
                 Text("Idle", comment: "Connection state label in popover header").foregroundStyle(.secondary)
             case .connecting:

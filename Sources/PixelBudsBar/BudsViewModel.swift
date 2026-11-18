@@ -124,7 +124,40 @@ final class BudsViewModel: ObservableObject {
         var serialCase: String
     }
 
-    @Published private(set) var connectionState: ConnectionState = .idle
+    @Published private(set) var connectionState: ConnectionState = .idle {
+        didSet { updateLiveness() }
+    }
+
+    /// Whether the UI should present the snapshot as current. Unlike
+    /// `connectionState`, this rides out short `.connecting` blips (a manual
+    /// Reconnect, or the buds dropping the control channel and us reopening
+    /// it a second later) so the popover and icon don't flash. Anything
+    /// definitive — not connected, an error, or a reconnect that takes longer
+    /// than the grace period — turns it off.
+    @Published private(set) var showsLiveData = false
+    private var liveGraceTask: Task<Void, Never>?
+    private static let reconnectGrace: Duration = .seconds(5)
+
+    private func updateLiveness() {
+        switch connectionState {
+        case .connected:
+            liveGraceTask?.cancel()
+            liveGraceTask = nil
+            if !showsLiveData { showsLiveData = true }
+        case .connecting:
+            guard showsLiveData, liveGraceTask == nil else { return }
+            liveGraceTask = Task { [weak self] in
+                try? await Task.sleep(for: Self.reconnectGrace)
+                guard !Task.isCancelled, let self else { return }
+                self.liveGraceTask = nil
+                if self.connectionState != .connected { self.showsLiveData = false }
+            }
+        case .idle, .notConnected, .error:
+            liveGraceTask?.cancel()
+            liveGraceTask = nil
+            if showsLiveData { showsLiveData = false }
+        }
+    }
     @Published private(set) var snapshot: BudsSnapshot?
     /// Last error from an individual setting write (not a connection drop).
     /// Surfaced as a transient banner in the UI; the underlying connection
@@ -285,27 +318,12 @@ final class BudsViewModel: ObservableObject {
     }
 
     func setAnc(_ state: MaestroPw_AncState) {
-        guard let connection else { return }
-        let skipRetry = snapshot?.bothInCase ?? false
-        Task { [weak self] in
-            do {
-                try await Self.writeWithTransientRetry(label: "Noise Control", skipRetry: skipRetry) {
-                    try await connection.service.setAncState(state)
-                }
-                await MainActor.run {
-                    guard var s = self?.snapshot else { return }
-                    s.anc = state
-                    s.updatedAt = Date()
-                    self?.snapshot = s
-                    self?.lastWriteError = nil
-                    self?.consecutiveTransportErrors = 0
-                }
-            } catch {
-                await MainActor.run {
-                    self?.handleWriteError(error, label: "Noise Control")
-                }
-            }
-        }
+        // Shared write path, so ANC also gets the other-bud fallback.
+        writeSetting(
+            label: "Noise Control",
+            write: { try await $0.setAncState(state) },
+            update: { $0.anc = state }
+        )
     }
 
     /// Dismiss the current write-error banner. Called from the UI's close button.
@@ -587,7 +605,12 @@ final class BudsViewModel: ObservableObject {
     /// broken: raw transport write failures from IOBluetooth and the RPC-layer
     /// `.transportClosed` that fires when the inbound stream ends.
     private static func isTransportError(_ error: Error) -> Bool {
-        if let rpc = error as? RpcError, case .transportClosed = rpc { return true }
+        if let rpc = error as? RpcError {
+            switch rpc {
+            case .transportClosed, .timeout: return true
+            default: break
+            }
+        }
         return (error as NSError).domain == "RFCOMMTransport"
     }
 

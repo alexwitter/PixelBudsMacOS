@@ -91,7 +91,11 @@ if [[ -n "$IDENTITY" ]]; then
              "$APP_DIR"
 else
     echo "→ Ad-hoc signing (local use only; set CODESIGN_IDENTITY for a release build)…"
-    codesign --force --deep --sign - "$APP_DIR"
+    # Entitlements apply to local builds too, so the sandbox is always on.
+    codesign --force \
+             --entitlements "$ENTITLEMENTS" \
+             --sign - \
+             "$APP_DIR"
 fi
 
 echo "✓ Built $APP_DIR"

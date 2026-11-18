@@ -137,9 +137,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func observeModel() {
         Publishers
-            .CombineLatest(model.$snapshot, model.$connectionState)
+            .CombineLatest3(model.$snapshot, model.$connectionState, model.$showsLiveData)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _, _ in self?.refreshStatusItem() }
+            .sink { [weak self] _, _, _ in self?.refreshStatusItem() }
             .store(in: &cancellables)
 
         // Funnel each new snapshot into the low-battery notifier. Distinct
@@ -208,7 +208,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             // something (Off/Unknown get no dot).
             // Until we have a live session, the snapshot is from the last one:
             // draw empty outlines rather than old levels that look current.
-            let live = model.connectionState == .connected
+            let live = model.showsLiveData
             let s = model.snapshot
             let ancBadge = live ? Self.ancBadgeColor(for: s?.anc) : nil
             let left = s.map { Gauge(level: $0.leftBattery, charging: $0.leftCharging, stale: $0.leftStale || !live) }

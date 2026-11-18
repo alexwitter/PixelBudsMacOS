@@ -9,6 +9,7 @@ public enum RpcError: Error, CustomStringConvertible {
     case streamEnded(status: UInt32)
     case channelResolutionFailed
     case notStarted
+    case timeout
 
     public var description: String {
         switch self {
@@ -20,6 +21,7 @@ public enum RpcError: Error, CustomStringConvertible {
         case .streamEnded(let s): return "stream ended: \(Self.statusName(s))"
         case .channelResolutionFailed: return "no Maestro channel responded to GetSoftwareInfo"
         case .notStarted: return "connection has not been started"
+        case .timeout: return "the buds didn't answer in time"
         }
     }
 
