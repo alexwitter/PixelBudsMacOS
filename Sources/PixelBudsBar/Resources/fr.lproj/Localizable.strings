@@ -13,7 +13,6 @@
 "Buds rejected the %@ change. Try again in a moment, or use the touch gesture on a bud." = "Les écouteurs ont refusé la modification %@. Réessayez dans un moment ou utilisez le geste tactile sur un écouteur.";
 "Your buds don't support %@ on this firmware." = "Vos écouteurs ne prennent pas en charge %@ avec ce firmware.";
 "Could not set %@: %@" = "Impossible de définir %@ : %@";
-"Could not ring buds: %@" = "Impossible de faire sonner les écouteurs : %@";
 
 // MARK: - LowBatteryNotifier
 "Left bud" = "Écouteur gauche";
@@ -45,10 +44,6 @@
 "Buds are in the case. Take one out and wear it to change settings." = "Les écouteurs sont dans le boîtier. Retirez-en un et portez-le pour modifier les réglages.";
 
 // MARK: - BudsPopoverView — find menu
-"Ring both" = "Faire sonner les deux";
-"Ring left only" = "Uniquement le gauche";
-"Ring right only" = "Uniquement le droit";
-"Stop ringing" = "Arrêter la sonnerie";
 "Quit" = "Quitter";
 "Reconnect" = "Reconnecter";
 
@@ -64,8 +59,6 @@
 "Launch at login" = "Lancer à la connexion";
 "Open popover at launch" = "Ouvrir le panneau au démarrage";
 "Pops the menu-bar popover every time the app starts so battery and connection are visible at a glance. Turn off for a quiet launch." = "Affiche le panneau de la barre de menus à chaque démarrage pour voir la batterie et la connexion d'un coup d'œil. Désactivez pour un démarrage discret.";
-"Ring buds shortcut" = "Raccourci pour faire sonner";
-"Global hotkey that triggers \"Ring both\" from any app. Click the field and press your combination, or clear it to disable." = "Raccourci clavier global qui déclenche « Faire sonner les deux » depuis n'importe quelle app. Cliquez sur le champ et appuyez sur votre combinaison, ou effacez-la pour désactiver.";
 "Approval required in System Settings." = "Approbation requise dans Réglages Système.";
 "Open Login Items" = "Ouvrir les éléments de connexion";
 

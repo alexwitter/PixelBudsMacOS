@@ -70,9 +70,6 @@ final class BudsViewModel: ObservableObject {
         /// numbers per bud and the case. `nil` until the initial reads succeed
         /// (these don't change during a session so we never re-fetch).
         var deviceInfo: DeviceInfo?
-        /// True if the GFPS Message Stream channel opened successfully. The
-        /// Find/Ring controls are gated on this — Maestro alone can't ring.
-        var canRingBuds: Bool = false
         /// Active A2DP codec label derived from CoreAudio stream format.
         /// `nil` while the probe hasn't completed or the codec can't be determined
         /// (hide the label rather than showing "Unknown"). Updated once per session
@@ -135,6 +132,16 @@ final class BudsViewModel: ObservableObject {
     /// definitive — not connected, an error, or a reconnect that takes longer
     /// than the grace period — turns it off.
     @Published private(set) var showsLiveData = false
+
+    /// Until this time the session loop may page the buds itself (see
+    /// runLiveSession). Opened when a live session ends or the user asks to
+    /// reconnect; cleared once connected.
+    private var reacquireUntil: Date?
+    private static let reacquireWindow: TimeInterval = 180
+
+    private func openReacquireWindow() {
+        reacquireUntil = Date().addingTimeInterval(Self.reacquireWindow)
+    }
     private var liveGraceTask: Task<Void, Never>?
     private static let reconnectGrace: Duration = .seconds(5)
 
@@ -288,6 +295,9 @@ final class BudsViewModel: ObservableObject {
             log.info("forceReconnect: ignored — no active consumer")
             return
         }
+        // A Reconnect click is permission to go and get the buds, even if
+        // macOS has dropped them.
+        openReacquireWindow()
         log.info("forceReconnect: tearing down current session and restarting")
 
         // Capture the live task and connection BEFORE cancelling, so the new
@@ -443,34 +453,6 @@ final class BudsViewModel: ObservableObject {
     // proper error. The read works fine so we keep ottsMode in the snapshot
     // for future use, but the toggle is hidden from the UI until we understand
     // the correct write semantics.
-
-    /// Send a GFPS ring command. Fire-and-forget: the buds beep loudly until
-    /// the user touches a bud or we send a `.stop`. Errors land in the
-    /// standard write-error banner. If the underlying channel turns out to
-    /// be dead (the peer closed it silently), we also hide the bell button
-    /// so the user doesn't keep hitting a broken control.
-    func ringBuds(_ target: GFPSChannel.RingTarget) {
-        guard let gfps = connection?.gfps else { return }
-        Task { [weak self] in
-            do {
-                try await gfps.ring(target)
-                await MainActor.run { self?.lastWriteError = nil }
-            } catch {
-                await MainActor.run {
-                    self?.lastWriteError = String(localized: "Could not ring buds: \(String(describing: error))")
-                    self?.markRingUnavailable()
-                }
-            }
-        }
-    }
-
-    /// Hide the Ring control in the popover. Called when GFPS closes from
-    /// the peer side (whenClosed) or when a write reveals the channel is dead.
-    private func markRingUnavailable() {
-        guard var s = snapshot, s.canRingBuds else { return }
-        s.canRingBuds = false
-        snapshot = s
-    }
 
     /// Common path: write a single setting and patch the snapshot.
     /// `write` performs the RPC; `update` applies the optimistic UI change.
@@ -638,26 +620,39 @@ final class BudsViewModel: ObservableObject {
         var suppressConnectingState = false
 
         while !Task.isCancelled {
-            // Only talk to the buds once macOS itself is connected to them.
-            // AppDelegate's baseband-connect watcher wakes us the moment that
-            // happens; this slow poll is only a backstop and costs no radio
-            // traffic (isConnected() is a local state read).
+            // Normally we only talk to the buds once macOS itself is connected
+            // to them; AppDelegate's baseband-connect watcher wakes us the
+            // moment that happens, and this slow poll is only a backstop that
+            // costs no radio traffic (isConnected() is a local state read).
+            //
+            // The exception is the few minutes after we lost them, or after
+            // the user hit Reconnect. Docking both buds in an open case drops
+            // the Mac's link, and macOS won't bring it back by itself, so we
+            // page them (opening the channel does that). After the window we
+            // go quiet, so buds asleep in a closed case aren't paged all night.
+            var reacquiring = false
             if let device = MaestroChannelOpener.findFirstPairedBuds(), !device.isConnected() {
-                if connectionState != .notConnected {
-                    log.info("session: buds not connected to this Mac — waiting for macOS to connect them")
+                let inWindow = reacquireUntil.map { Date() < $0 } ?? false
+                if !inWindow {
+                    if connectionState != .notConnected {
+                        log.info("session: buds not connected to this Mac — waiting for macOS to connect them")
+                    }
+                    connectionState = .notConnected
+                    consecutiveFailures = 0
+                    suppressConnectingState = false
+                    try? await Task.sleep(nanoseconds: 30_000_000_000)
+                    continue
                 }
+                reacquiring = true
+                // Trying quietly: the buds really aren't connected right now.
                 connectionState = .notConnected
-                consecutiveFailures = 0
-                suppressConnectingState = false
-                try? await Task.sleep(nanoseconds: 30_000_000_000)
-                continue
-            }
-            if !suppressConnectingState {
+                log.info("session: buds dropped off this Mac — paging them (window open until \(self.reacquireUntil!, privacy: .public))")
+            } else if !suppressConnectingState {
                 connectionState = .connecting
             }
             log.info("session: attempt \(consecutiveFailures + 1) (failures so far: \(consecutiveFailures))")
 
-            let (gotSnapshot, err) = await runOneSession()
+            let (gotSnapshot, err) = await runOneSession(allowPaging: reacquiring)
             await teardownConnection()
             if Task.isCancelled { return }
 
@@ -667,8 +662,16 @@ final class BudsViewModel: ObservableObject {
                 log.info("session: ended after publishing snapshot — error: \(err.map { String(describing: $0) } ?? "none", privacy: .public)")
                 consecutiveFailures = 0
                 suppressConnectingState = false
+                // The link just went away (or flapped): give ourselves a few
+                // minutes to win the buds back if macOS drops them.
+                openReacquireWindow()
             } else {
                 consecutiveFailures += 1
+                if reacquiring {
+                    // Expected while the buds are out of reach; don't escalate
+                    // to the error state, just keep a moderate backoff.
+                    consecutiveFailures = min(consecutiveFailures, 3)
+                }
                 log.error("session: failed before snapshot (attempt \(consecutiveFailures)) — \(err.map { String(describing: $0) } ?? "unknown", privacy: .public)")
                 if consecutiveFailures >= maxFailuresBeforeGivingUp {
                     let message = lastError.map { String(describing: $0) }
@@ -706,10 +709,10 @@ final class BudsViewModel: ObservableObject {
     ///     (so the user has seen something); the session then ended (drop or
     ///     cancellation). Caller should retry without consuming the budget.
     ///   - `gotSnapshot == false` → never got data; caller decrements budget.
-    private func runOneSession() async -> (Bool, Error?) {
+    private func runOneSession(allowPaging: Bool) async -> (Bool, Error?) {
         let conn: BudsConnection
         do {
-            conn = try await BudsConnection.open()
+            conn = try await BudsConnection.open(allowPaging: allowPaging)
         } catch {
             return (false, error)
         }
@@ -780,7 +783,6 @@ final class BudsViewModel: ObservableObject {
             volumeExposureNotifications: initialVolumeExposure,
             ottsMode: initialOtts,
             deviceInfo: deviceInfo,
-            canRingBuds: conn.gfps != nil,
             // A bud in the case is definitively not in an ear. Otherwise we
             // start as .unknown — the OOBE stream will supply the first event.
             leftInEar:  rt.placement.leftBudInCase  ? .outOfEar : .unknown,
@@ -788,6 +790,7 @@ final class BudsViewModel: ObservableObject {
         )
         self.snapshot = snap
         self.connectionState = .connected
+        reacquireUntil = nil
         log.info("session: connected — device=\(snap.deviceName, privacy: .public) anc=\(String(describing: snap.anc), privacy: .public) inCase=\(snap.bothInCase)")
         // If a previous write triggered a forced reconnect, clear the
         // "Reconnecting…" banner now that we're back online.
@@ -810,18 +813,6 @@ final class BudsViewModel: ObservableObject {
                 guard var s = self?.snapshot else { return }
                 s.activeCodec = codec
                 self?.snapshot = s
-            }
-        }
-
-        // GFPS observer: if the secondary channel dies mid-session (e.g. the
-        // buds drop it on case re-seat), hide the Ring control so the user
-        // doesn't hit a broken button. We attach this *outside* the main
-        // task group below because GFPS going down should NOT end the Maestro
-        // session — the rest of the app keeps working.
-        if let gfps = conn.gfps {
-            Task { [weak self] in
-                await gfps.whenClosed()
-                await MainActor.run { self?.markRingUnavailable() }
             }
         }
 
@@ -860,7 +851,7 @@ final class BudsViewModel: ObservableObject {
                     // device (the phone), the RFCOMM link goes half-dead: the
                     // subscription streams stop delivering but never *end*, so
                     // without an active probe the session would look "connected"
-                    // forever. A lightweight unary every 15s detects this — if it
+                    // forever. A lightweight unary every 5s detects this — if it
                     // throws (transport dead / write timed out), it ends the task
                     // group and the outer loop reconnects.
                     //
@@ -871,7 +862,9 @@ final class BudsViewModel: ObservableObject {
                     // reconnect every interval. GetSoftwareInfo is cheap, always
                     // implemented, and round-trips on the live channel.
                     while !Task.isCancelled {
-                        try await Task.sleep(for: .seconds(15))
+                        // 5s, not 15s: a bud going into the case can silence
+                        // the channel, and 15s of a frozen popover is long.
+                        try await Task.sleep(for: .seconds(5))
                         if Task.isCancelled { return }
                         _ = try await conn.service.getSoftwareInfo()
                     }

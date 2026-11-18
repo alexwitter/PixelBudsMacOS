@@ -13,7 +13,6 @@
 "Buds rejected the %@ change. Try again in a moment, or use the touch gesture on a bud." = "Los auriculares rechazaron el cambio de %@. Inténtalo de nuevo en un momento o usa el gesto táctil en un auricular.";
 "Your buds don't support %@ on this firmware." = "Tus auriculares no admiten %@ en este firmware.";
 "Could not set %@: %@" = "No se pudo configurar %@: %@";
-"Could not ring buds: %@" = "No se pudo hacer sonar los auriculares: %@";
 
 // MARK: - LowBatteryNotifier
 "Left bud" = "Auricular izquierdo";
@@ -45,10 +44,6 @@
 "Buds are in the case. Take one out and wear it to change settings." = "Los auriculares están en el estuche. Saca uno y póntelo para cambiar ajustes.";
 
 // MARK: - BudsPopoverView — find menu
-"Ring both" = "Hacer sonar ambos";
-"Ring left only" = "Solo izquierdo";
-"Ring right only" = "Solo derecho";
-"Stop ringing" = "Detener sonido";
 "Quit" = "Salir";
 "Reconnect" = "Reconectar";
 
@@ -64,8 +59,6 @@
 "Launch at login" = "Iniciar al entrar";
 "Open popover at launch" = "Abrir panel al iniciar";
 "Pops the menu-bar popover every time the app starts so battery and connection are visible at a glance. Turn off for a quiet launch." = "Muestra el panel de la barra de menús cada vez que la app inicia para ver la batería y la conexión de un vistazo. Desactívalo para un inicio silencioso.";
-"Ring buds shortcut" = "Atajo para hacer sonar auriculares";
-"Global hotkey that triggers \"Ring both\" from any app. Click the field and press your combination, or clear it to disable." = "Atajo de teclado global que activa «Hacer sonar ambos» desde cualquier app. Haz clic en el campo y pulsa tu combinación, o bórralo para desactivarlo.";
 "Approval required in System Settings." = "Se requiere aprobación en Ajustes del Sistema.";
 "Open Login Items" = "Abrir Elementos de inicio de sesión";
 

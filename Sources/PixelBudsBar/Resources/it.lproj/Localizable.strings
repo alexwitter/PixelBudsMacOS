@@ -13,7 +13,6 @@
 "Buds rejected the %@ change. Try again in a moment, or use the touch gesture on a bud." = "Gli auricolari hanno rifiutato la modifica %@. Riprova tra un momento o usa il gesto touch su un auricolare.";
 "Your buds don't support %@ on this firmware." = "I tuoi auricolari non supportano %@ con questo firmware.";
 "Could not set %@: %@" = "Impossibile impostare %@: %@";
-"Could not ring buds: %@" = "Impossibile far suonare gli auricolari: %@";
 
 // MARK: - LowBatteryNotifier
 "Left bud" = "Auricolare sinistro";
@@ -45,10 +44,6 @@
 "Buds are in the case. Take one out and wear it to change settings." = "Gli auricolari sono nella custodia. Tirarne uno fuori e indossarlo per modificare le impostazioni.";
 
 // MARK: - BudsPopoverView — find menu
-"Ring both" = "Fai suonare entrambi";
-"Ring left only" = "Solo sinistro";
-"Ring right only" = "Solo destro";
-"Stop ringing" = "Interrompi suono";
 "Quit" = "Esci";
 "Reconnect" = "Riconnetti";
 
@@ -64,8 +59,6 @@
 "Launch at login" = "Avvia all'accesso";
 "Open popover at launch" = "Apri pannello all'avvio";
 "Pops the menu-bar popover every time the app starts so battery and connection are visible at a glance. Turn off for a quiet launch." = "Mostra il pannello della barra dei menu a ogni avvio per vedere batteria e connessione a colpo d'occhio. Disattiva per un avvio silenzioso.";
-"Ring buds shortcut" = "Scorciatoia per far suonare";
-"Global hotkey that triggers \"Ring both\" from any app. Click the field and press your combination, or clear it to disable." = "Scorciatoia globale che attiva «Fai suonare entrambi» da qualsiasi app. Fai clic nel campo e premi la tua combinazione, o cancellala per disabilitarla.";
 "Approval required in System Settings." = "Approvazione richiesta in Impostazioni di Sistema.";
 "Open Login Items" = "Apri Elementi di accesso";
 

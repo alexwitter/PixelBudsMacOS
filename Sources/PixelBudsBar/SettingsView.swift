@@ -1,5 +1,4 @@
 import SwiftUI
-import KeyboardShortcuts
 import MaestroIOBluetooth
 
 // MARK: - Tab enum
@@ -125,14 +124,6 @@ struct SettingsView: View {
                         String(localized: "Open popover at launch"),
                         String(localized: "Pops the menu-bar popover every time the app starts so battery and connection are visible at a glance. Turn off for a quiet launch.")
                     )
-                }
-                HStack(alignment: .top) {
-                    labeledRow(
-                        String(localized: "Ring buds shortcut"),
-                        String(localized: "Global hotkey that triggers \"Ring both\" from any app. Click the field and press your combination, or clear it to disable.")
-                    )
-                    Spacer()
-                    KeyboardShortcuts.Recorder(for: .ringBuds)
                 }
                 if loginItem.state == .requiresApproval {
                     HStack {

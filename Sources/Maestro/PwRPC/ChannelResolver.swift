@@ -5,7 +5,8 @@ import SwiftProtobuf
 /// on each. The first to respond with a valid SoftwareInfo is the active channel
 /// for this RFCOMM session.
 public enum ChannelResolver {
-    /// Probes candidate Maestro channels sequentially, returning the first that responds.
+    /// Probes candidate Maestro channels sequentially, returning the first that responds
+    /// and matches write-capability if multiple bud channels are active.
     /// Sequential probing avoids the buds rejecting concurrent in-flight requests on
     /// distinct channels.
     public static func resolve(
@@ -27,11 +28,31 @@ public enum ChannelResolver {
                 try await probe(connection: connection, channel: channel, path: path, timeout: seconds)
                 logger?("channel \(channel) responded in \(String(format: "%.2f", Date().timeIntervalSince(start)))s")
                 
-                // Either bud channel serves reads and streams equally well. We
-                // used to pick between them by writing a setting back to each
-                // bud, which meant a settings write on every connect. Now the
-                // first responsive channel wins, and BudsViewModel's write path
-                // moves to the other bud only if a real write is refused there.
+                // If it's a bud channel, check if the alternative bud is also responsive
+                if let altChannel = MaestroChannel.alternativeBudChannel(for: channel) {
+                    logger?("checking alternative bud channel \(altChannel)…")
+                    do {
+                        try await probe(connection: connection, channel: altChannel, path: path, timeout: seconds)
+                        logger?("alternative bud channel \(altChannel) is also responsive")
+                        
+                        // We have both buds responsive! Test write-capability to select the primary/in-ear bud.
+                        logger?("both buds responsive: testing write capability to select the active primary bud")
+                        if await isWriteCapable(connection: connection, channel: channel) {
+                            logger?("bud channel \(channel) accepts writes successfully: returning \(channel)")
+                            return channel
+                        } else if await isWriteCapable(connection: connection, channel: altChannel) {
+                            logger?("bud channel \(channel) rejected writes, but alternative bud channel \(altChannel) accepts them: returning \(altChannel)")
+                            return altChannel
+                        } else {
+                            logger?("both bud channels rejected writes: defaulting to channel \(channel)")
+                            return channel
+                        }
+                    } catch {
+                        logger?("alternative bud channel \(altChannel) is silent: returning active bud channel \(channel)")
+                        return channel
+                    }
+                }
+                
                 return channel
             } catch is CancellationError {
                 throw CancellationError()
@@ -63,6 +84,42 @@ public enum ChannelResolver {
             }
             defer { group.cancelAll() }
             try await group.next()
+        }
+    }
+
+    /// Tests whether a channel is write-capable by reading `gestureEnabled` and
+    /// writing the same value back. Only runs when both buds answer, and it
+    /// matters: the bud that accepts writes is the one whose channel keeps
+    /// streaming updates as buds go in and out of the case. Listening on the
+    /// other bud's channel left the app deaf until the heartbeat noticed.
+    private static func isWriteCapable(connection: RpcConnection, channel: UInt32) async -> Bool {
+        let pathGet = RpcPath("maestro_pw.Maestro/ReadSetting")
+        let pathSet = RpcPath("maestro_pw.Maestro/WriteSetting")
+        
+        do {
+            var readReq = MaestroPw_ReadSettingMsg()
+            readReq.settingsID = .allegroGestureEnable
+            let readPayload = try await connection.unary(
+                channel: channel,
+                path: pathGet,
+                request: readReq
+            )
+            let rsp = try MaestroPw_SettingsRsp(serializedBytes: readPayload)
+            let enabled = rsp.value.gestureEnable
+            
+            var writeValue = MaestroPw_SettingValue()
+            writeValue.gestureEnable = enabled
+            var writeReq = MaestroPw_WriteSettingMsg()
+            writeReq.setting = writeValue
+            
+            _ = try await connection.unary(
+                channel: channel,
+                path: pathSet,
+                request: writeReq
+            )
+            return true
+        } catch {
+            return false
         }
     }
 }

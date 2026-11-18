@@ -1,7 +1,6 @@
 import AppKit
 import Combine
 import IOBluetooth
-import KeyboardShortcuts
 import MaestroIOBluetooth
 import OSLog
 import SwiftUI
@@ -63,17 +62,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         model.bootstrapBackgroundMonitoring()
 
         observeBluetoothReconnects()
-
-        // Register the system-wide hotkey for "ring both buds". The handler
-        // only fires when the user has configured a combination in Settings;
-        // until then KeyboardShortcuts ignores it silently.
-        KeyboardShortcuts.onKeyUp(for: .ringBuds) { [weak self] in
-            guard let self else { return }
-            // Only attempt the ring if the GFPS channel actually opened —
-            // otherwise we'd just produce a confusing write error in the UI.
-            guard self.model.snapshot?.canRingBuds == true else { return }
-            self.model.ringBuds(.both)
-        }
 
         NotificationCenter.default.addObserver(
             forName: .openPixelBudsSettings,
@@ -329,20 +317,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     /// Builds and displays the right-click NSMenu next to the status item.
-    /// We construct it fresh each time so item enablement (Ring) reflects the
-    /// current snapshot without needing a validator selector.
+    /// Built fresh each time it's shown.
     private func showContextMenu() {
         guard let statusItem else { return }
         let menu = NSMenu()
-
-        let ringItem = NSMenuItem(
-            title: "Ring both buds",
-            action: #selector(menuRingBuds),
-            keyEquivalent: ""
-        )
-        ringItem.target = self
-        ringItem.isEnabled = model.snapshot?.canRingBuds == true
-        menu.addItem(ringItem)
 
         let reconnectItem = NSMenuItem(
             title: "Reconnect",
@@ -378,11 +356,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         statusItem.menu = menu
         statusItem.button?.performClick(nil)
         statusItem.menu = nil
-    }
-
-    @objc private func menuRingBuds() {
-        guard model.snapshot?.canRingBuds == true else { return }
-        model.ringBuds(.both)
     }
 
     @objc private func menuReconnect() {

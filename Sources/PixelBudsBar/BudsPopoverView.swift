@@ -286,9 +286,6 @@ struct BudsPopoverView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            if model.snapshot?.canRingBuds == true {
-                findMenu
-            }
             Button {
                 model.forceReconnect()
             } label: {
@@ -311,26 +308,6 @@ struct BudsPopoverView: View {
             .buttonStyle(.borderless)
             .controlSize(.small)
         }
-    }
-
-    /// Drop-down for the GFPS "ring my buds" command. Only renders when the
-    /// secondary GFPS channel actually opened. We keep a separate Stop entry
-    /// because the buds keep beeping until they hear a tap or our stop frame.
-    private var findMenu: some View {
-        Menu {
-            Button(String(localized: "Ring both", comment: "Ring both buds menu item")) { model.ringBuds(.both) }
-            Button(String(localized: "Ring left only", comment: "Ring left bud menu item")) { model.ringBuds(.left) }
-            Button(String(localized: "Ring right only", comment: "Ring right bud menu item")) { model.ringBuds(.right) }
-            Divider()
-            Button(String(localized: "Stop ringing", comment: "Stop ring menu item")) { model.ringBuds(.stop) }
-        } label: {
-            Image(systemName: "bell")
-        }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .controlSize(.small)
-        .help("Find my buds")
     }
 }
 

@@ -13,7 +13,6 @@
 "Buds rejected the %@ change. Try again in a moment, or use the touch gesture on a bud." = "Buds rejected the %@ change. Try again in a moment, or use the touch gesture on a bud.";
 "Your buds don't support %@ on this firmware." = "Your buds don't support %@ on this firmware.";
 "Could not set %@: %@" = "Could not set %@: %@";
-"Could not ring buds: %@" = "Could not ring buds: %@";
 
 // MARK: - LowBatteryNotifier
 "Left bud" = "Left bud";
@@ -45,10 +44,6 @@
 "Buds are in the case. Take one out and wear it to change settings." = "Buds are in the case. Take one out and wear it to change settings.";
 
 // MARK: - BudsPopoverView — find menu
-"Ring both" = "Ring both";
-"Ring left only" = "Ring left only";
-"Ring right only" = "Ring right only";
-"Stop ringing" = "Stop ringing";
 "Quit" = "Quit";
 
 // MARK: - BudsPopoverView — reconnect
@@ -66,8 +61,6 @@
 "Launch at login" = "Launch at login";
 "Open popover at launch" = "Open popover at launch";
 "Pops the menu-bar popover every time the app starts so battery and connection are visible at a glance. Turn off for a quiet launch." = "Pops the menu-bar popover every time the app starts so battery and connection are visible at a glance. Turn off for a quiet launch.";
-"Ring buds shortcut" = "Ring buds shortcut";
-"Global hotkey that triggers \"Ring both\" from any app. Click the field and press your combination, or clear it to disable." = "Global hotkey that triggers \"Ring both\" from any app. Click the field and press your combination, or clear it to disable.";
 "Approval required in System Settings." = "Approval required in System Settings.";
 "Open Login Items" = "Open Login Items";
 

@@ -67,10 +67,6 @@ final class BudsConnection {
     let device: IOBluetoothDevice
     private(set) var service: MaestroService
     let model: Model
-    /// Secondary RFCOMM channel that carries the GFPS Message Stream (used
-    /// for ring-the-buds). Optional because not every firmware/CoD pair
-    /// advertises the GFPS SDP record; the rest of the app works without it.
-    let gfps: GFPSChannel?
     private let adapter: RFCOMMTransportAdapter
     let connection: RpcConnection
 
@@ -83,20 +79,18 @@ final class BudsConnection {
         model: Model,
         adapter: RFCOMMTransportAdapter,
         connection: RpcConnection,
-        service: MaestroService,
-        gfps: GFPSChannel?
+        service: MaestroService
     ) {
         self.device = device
         self.model = model
         self.adapter = adapter
         self.connection = connection
         self.service = service
-        self.gfps = gfps
     }
 
-    static func open(timeout seconds: TimeInterval = 15.0) async throws -> BudsConnection {
+    static func open(timeout seconds: TimeInterval = 15.0, allowPaging: Bool = false) async throws -> BudsConnection {
         try await withThrowingTaskGroup(of: BudsConnection.self) { group in
-            group.addTask { try await openImpl() }
+            group.addTask { try await openImpl(allowPaging: allowPaging) }
             group.addTask {
                 try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
                 throw ConnectError.timeout
@@ -109,15 +103,15 @@ final class BudsConnection {
         }
     }
 
-    private static func openImpl() async throws -> BudsConnection {
+    private static func openImpl(allowPaging: Bool) async throws -> BudsConnection {
         guard let device = MaestroChannelOpener.findFirstPairedBuds() else {
             throw ConnectError.noPairedBuds
         }
-        // Never page the buds ourselves. Opening RFCOMM to a device macOS
-        // isn't connected to makes bluetoothd page it and try to bring up
-        // every profile — all night if the buds are asleep in the case, and
-        // in a tug-of-war with the phone when they're in use there.
-        guard device.isConnected() else {
+        // Don't page the buds unless the caller says so. Opening RFCOMM to a
+        // device macOS isn't connected to makes bluetoothd page it and bring
+        // up every profile — all night if the buds are asleep in the case.
+        // BudsViewModel only allows it for a few minutes after losing them.
+        guard allowPaging || device.isConnected() else {
             throw ConnectError.notConnectedToThisMac
         }
         let adapter = RFCOMMTransportAdapter()
@@ -138,23 +132,17 @@ final class BudsConnection {
         }
         let svc = MaestroService(connection: conn, channel: channel)
         let model = Model.from(device: device)
-        // Best-effort GFPS opener — short timeout so a missing channel
-        // doesn't block the rest of the connect path. Result is allowed to
-        // be nil; UI hides the Ring button in that case.
-        let gfps = await GFPSChannel.open(on: device, timeout: 4.0)
         return BudsConnection(
             device: device,
             model: model,
             adapter: adapter,
             connection: conn,
-            service: svc,
-            gfps: gfps
+            service: svc
         )
     }
 
     func close() async {
         await connection.stop()
         await adapter.close()
-        await gfps?.close()
     }
 }

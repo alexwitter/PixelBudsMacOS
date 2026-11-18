@@ -13,7 +13,6 @@
 "Buds rejected the %@ change. Try again in a moment, or use the touch gesture on a bud." = "Die Earbuds haben die Änderung von %@ abgelehnt. Versuche es nach einem Moment erneut oder nutze die Touch-Geste an einem Earbud.";
 "Your buds don't support %@ on this firmware." = "Deine Earbuds unterstützen %@ bei dieser Firmware nicht.";
 "Could not set %@: %@" = "%@ konnte nicht festgelegt werden: %@";
-"Could not ring buds: %@" = "Earbuds konnten nicht klingeln: %@";
 
 // MARK: - LowBatteryNotifier
 "Left bud" = "Linkes Earbud";
@@ -45,10 +44,6 @@
 "Buds are in the case. Take one out and wear it to change settings." = "Earbuds befinden sich im Case. Nimm eines heraus und trage es, um Einstellungen zu ändern.";
 
 // MARK: - BudsPopoverView — find menu
-"Ring both" = "Beide klingeln lassen";
-"Ring left only" = "Nur links klingeln";
-"Ring right only" = "Nur rechts klingeln";
-"Stop ringing" = "Klingeln stoppen";
 "Quit" = "Beenden";
 "Reconnect" = "Erneut verbinden";
 
@@ -64,8 +59,6 @@
 "Launch at login" = "Bei Anmeldung starten";
 "Open popover at launch" = "Popover beim Start öffnen";
 "Pops the menu-bar popover every time the app starts so battery and connection are visible at a glance. Turn off for a quiet launch." = "Öffnet das Menüleisten-Popover bei jedem App-Start, damit Akku und Verbindung sofort sichtbar sind. Deaktivieren für einen stillen Start.";
-"Ring buds shortcut" = "Tastenkürzel zum Klingeln";
-"Global hotkey that triggers \"Ring both\" from any app. Click the field and press your combination, or clear it to disable." = "Globales Tastenkürzel, das \"Beide klingeln lassen\" aus jeder App auslöst. Klicke auf das Feld und drücke deine Kombination oder lösche sie, um es zu deaktivieren.";
 "Approval required in System Settings." = "Genehmigung in den Systemeinstellungen erforderlich.";
 "Open Login Items" = "Anmeldeelemente öffnen";
 

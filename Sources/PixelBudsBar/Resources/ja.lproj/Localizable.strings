@@ -13,7 +13,6 @@
 "Buds rejected the %@ change. Try again in a moment, or use the touch gesture on a bud." = "イヤバッドが %@ の変更を拒否しました。少し待ってから再試行するか、イヤバッドのタッチジェスチャーを使用してください。";
 "Your buds don't support %@ on this firmware." = "お使いのイヤバッドはこのファームウェアで %@ をサポートしていません。";
 "Could not set %@: %@" = "%@ を設定できませんでした: %@";
-"Could not ring buds: %@" = "イヤバッドを鳴らせませんでした: %@";
 
 // MARK: - LowBatteryNotifier
 "Left bud" = "左のイヤバッド";
@@ -45,10 +44,6 @@
 "Buds are in the case. Take one out and wear it to change settings." = "イヤバッドはケースに入っています。設定を変更するには、一方を取り出して装着してください。";
 
 // MARK: - BudsPopoverView — find menu
-"Ring both" = "両方を鳴らす";
-"Ring left only" = "左のみ鳴らす";
-"Ring right only" = "右のみ鳴らす";
-"Stop ringing" = "鳴動を停止";
 "Quit" = "終了";
 "Reconnect" = "再接続";
 
@@ -64,8 +59,6 @@
 "Launch at login" = "ログイン時に起動";
 "Open popover at launch" = "起動時にポップオーバーを開く";
 "Pops the menu-bar popover every time the app starts so battery and connection are visible at a glance. Turn off for a quiet launch." = "アプリ起動ごとにメニューバーのポップオーバーを表示し、バッテリーと接続状態をひと目で確認できます。静かに起動するにはオフにしてください。";
-"Ring buds shortcut" = "イヤバッドを鳴らすショートカット";
-"Global hotkey that triggers \"Ring both\" from any app. Click the field and press your combination, or clear it to disable." = "どのアプリからでも「両方を鳴らす」を起動するグローバルホットキーです。フィールドをクリックして組み合わせを押すか、クリアして無効にしてください。";
 "Approval required in System Settings." = "システム設定で承認が必要です。";
 "Open Login Items" = "ログイン項目を開く";
 
