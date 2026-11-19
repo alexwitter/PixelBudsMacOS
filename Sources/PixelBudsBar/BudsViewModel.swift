@@ -139,6 +139,36 @@ final class BudsViewModel: ObservableObject {
     private var reacquireUntil: Date?
     private static let reacquireWindow: TimeInterval = 180
 
+    /// True when channel opens keep timing out although macOS is connected
+    /// to the buds: the system's RFCOMM channel is stuck. The popover offers
+    /// `resetBluetoothLink()` in that state.
+    @Published private(set) var linkStuck = false
+    private var stuckOpenFailures = 0
+
+    private static func isOpenTimeout(_ error: Error?) -> Bool {
+        guard let error = error as? BudsConnection.ConnectError,
+              case .rfcommOpen(let inner) = error,
+              let rf = inner as? RFCOMMOpenError,
+              case .openCompleteFailed(let r) = rf else { return false }
+        return r == kIOReturnTimeout
+    }
+
+    /// Drops and re-establishes the Bluetooth link to the buds, the only cure
+    /// for a stuck system channel. Audio cuts out for a few seconds, so this
+    /// only ever runs from an explicit click. The reacquire window lets the
+    /// session loop page the buds straight back.
+    func resetBluetoothLink() {
+        guard let device = MaestroChannelOpener.findFirstPairedBuds() else { return }
+        log.info("resetBluetoothLink: closing the baseband link")
+        let result = device.closeConnection()
+        if result != kIOReturnSuccess {
+            log.error("resetBluetoothLink: closeConnection returned \(ioReturnString(result), privacy: .public)")
+        }
+        stuckOpenFailures = 0
+        linkStuck = false
+        forceReconnect()   // also opens the reacquire window
+    }
+
     private func openReacquireWindow() {
         reacquireUntil = Date().addingTimeInterval(Self.reacquireWindow)
     }
@@ -658,6 +688,22 @@ final class BudsViewModel: ObservableObject {
 
             lastError = err ?? lastError
 
+            // Opens that time out while macOS still has the buds connected
+            // mean the system's RFCOMM channel is stuck, not that the buds are
+            // away. Only dropping the Bluetooth link clears it, so after a few
+            // we say so and offer that instead of retrying blindly.
+            if !gotSnapshot, Self.isOpenTimeout(err),
+               MaestroChannelOpener.findFirstPairedBuds()?.isConnected() == true {
+                stuckOpenFailures += 1
+                if stuckOpenFailures >= 3, !linkStuck {
+                    log.error("session: channel opens keep timing out on a live link — the system channel is stuck")
+                    linkStuck = true
+                }
+            } else {
+                stuckOpenFailures = 0
+                if linkStuck { linkStuck = false }
+            }
+
             if gotSnapshot {
                 log.info("session: ended after publishing snapshot — error: \(err.map { String(describing: $0) } ?? "none", privacy: .public)")
                 consecutiveFailures = 0
@@ -791,6 +837,8 @@ final class BudsViewModel: ObservableObject {
         self.snapshot = snap
         self.connectionState = .connected
         reacquireUntil = nil
+        stuckOpenFailures = 0
+        linkStuck = false
         log.info("session: connected — device=\(snap.deviceName, privacy: .public) anc=\(String(describing: snap.anc), privacy: .public) inCase=\(snap.bothInCase)")
         // If a previous write triggered a forced reconnect, clear the
         // "Reconnecting…" banner now that we're back online.
@@ -861,12 +909,28 @@ final class BudsViewModel: ObservableObject {
                     // exactly what the old 30s poll did, silently forcing a full
                     // reconnect every interval. GetSoftwareInfo is cheap, always
                     // implemented, and round-trips on the live channel.
+                    //
+                    // A single slow reply is NOT treated as death. Tearing the
+                    // channel down is risky: if the buds never confirm the
+                    // close, macOS's Bluetooth stack keeps the channel stuck
+                    // and refuses every new open until the link itself drops.
+                    // So a timeout only counts as a miss, and it takes two in
+                    // a row. A failed write (the link really is gone) still
+                    // ends the session at once.
+                    var misses = 0
                     while !Task.isCancelled {
-                        // 5s, not 15s: a bud going into the case can silence
-                        // the channel, and 15s of a frozen popover is long.
+                        // Every 5s: a bud going into the case can silence the
+                        // channel, and a long-frozen popover is worse.
                         try await Task.sleep(for: .seconds(5))
                         if Task.isCancelled { return }
-                        _ = try await conn.service.getSoftwareInfo()
+                        do {
+                            _ = try await conn.service.getSoftwareInfo()
+                            misses = 0
+                        } catch RpcError.timeout {
+                            misses += 1
+                            log.info("heartbeat: no reply (miss \(misses) of 2)")
+                            if misses >= 2 { throw RpcError.timeout }
+                        }
                     }
                 }
                 // Wait for any task to finish — session drop or heartbeat failure.

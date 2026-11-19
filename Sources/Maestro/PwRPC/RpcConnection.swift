@@ -66,11 +66,11 @@ public actor RpcConnection {
 
     // MARK: - Public API
 
-    /// How long a unary call waits for its reply. Replies normally arrive in
-    /// tens of milliseconds; without a ceiling, one lost reply would hang its
-    /// caller forever — including the session heartbeat, which would then
-    /// never notice a dead link.
-    public static let defaultUnaryTimeout: TimeInterval = 5.0
+    /// How long a unary call waits for its reply. Replies usually arrive in
+    /// tens of milliseconds, but while audio is streaming they have been seen
+    /// to take 7s or more. Without a ceiling one lost reply would hang its
+    /// caller forever; too low a ceiling makes a healthy link look dead.
+    public static let defaultUnaryTimeout: TimeInterval = 10.0
 
     public func unary(
         channel: UInt32,

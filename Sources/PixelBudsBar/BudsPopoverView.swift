@@ -12,7 +12,7 @@ struct BudsPopoverView: View {
             if let snap = model.snapshot {
                 let live = model.showsLiveData
                 if !live {
-                    lastSeenNotice(since: snap.updatedAt)
+                    notLiveNotice(since: snap.updatedAt)
                 } else if snap.anyStale {
                     staleNotice(snap)
                 }
@@ -51,14 +51,44 @@ struct BudsPopoverView: View {
 
     /// Shown whenever there's no live session: the rows below are whatever
     /// the buds last told us, so say how old they are.
-    private func lastSeenNotice(since: Date) -> some View {
-        HStack(alignment: .top, spacing: 6) {
-            Image(systemName: "antenna.radiowaves.left.and.right.slash")
-                .foregroundStyle(.secondary)
+    private func notLiveNotice(since: Date) -> some View {
+        let isError: Bool = { if case .error = model.connectionState { return true } else { return false } }()
+        let title: String
+        if model.linkStuck {
+            title = String(localized: "The Mac's Bluetooth channel to the buds is stuck", comment: "Notice when the system RFCOMM channel is wedged")
+        } else if isError {
+            title = String(localized: "Can't reach the buds' controls", comment: "Notice when the control channel can't be opened")
+        } else if model.connectionState == .notConnected {
+            title = String(localized: "Not connected to this Mac", comment: "Notice when there is no live connection to the buds")
+        } else {
+            title = String(localized: "Connecting…", comment: "Notice while reconnecting")
+        }
+        return HStack(alignment: .top, spacing: 6) {
+            Image(systemName: isError ? "exclamationmark.triangle.fill" : "antenna.radiowaves.left.and.right.slash")
+                .foregroundStyle(isError ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
                 .imageScale(.small)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Not connected to this Mac", comment: "Notice when there is no live connection to the buds")
+                Text(title)
                     .font(.caption)
+                    .fixedSize(horizontal: false, vertical: true)
+                if model.linkStuck {
+                    Text("Audio is fine, but battery and settings can't update. Resetting the link fixes it; sound drops for a few seconds.",
+                         comment: "Explains the stuck-channel state and the reset")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button(String(localized: "Reset Bluetooth link", comment: "Button that drops and restores the Bluetooth link")) {
+                        model.resetBluetoothLink()
+                    }
+                    .controlSize(.small)
+                    .padding(.top, 2)
+                } else if isError {
+                    Button(String(localized: "Reconnect", comment: "Reconnect button")) {
+                        model.forceReconnect()
+                    }
+                    .controlSize(.small)
+                    .padding(.top, 2)
+                }
                 Text("Last seen \(since, format: .relative(presentation: .named)), at \(since, format: .dateTime.hour().minute())",
                      comment: "When the shown battery levels were last read")
                     .font(.caption2)
@@ -214,13 +244,20 @@ struct BudsPopoverView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            Button {
-                model.forceReconnect()
-            } label: {
-                Label(String(localized: "Reconnect", comment: "Reconnect button"),
-                      systemImage: "arrow.clockwise")
+            if model.linkStuck {
+                Button(String(localized: "Reset Bluetooth link", comment: "Button that drops and restores the Bluetooth link")) {
+                    model.resetBluetoothLink()
+                }
+                .controlSize(.small)
+            } else {
+                Button {
+                    model.forceReconnect()
+                } label: {
+                    Label(String(localized: "Reconnect", comment: "Reconnect button"),
+                          systemImage: "arrow.clockwise")
+                }
+                .controlSize(.small)
             }
-            .controlSize(.small)
         }
     }
 
